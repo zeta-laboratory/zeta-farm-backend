@@ -44,6 +44,7 @@ zeta-farm-backend/
 │   ├── checkin.ts      # 签到奖励
 │   ├── gluck.ts        # Gluck 抽奖
 │   ├── fertilizer.ts   # 肥料效果
+│   ├── contract.ts     # 智能合约配置
 │   └── index.ts        # 统一导出
 ├── lib/
 │   └── mongodb.ts      # MongoDB 连接管理
@@ -52,12 +53,16 @@ zeta-farm-backend/
 ├── middleware/
 │   └── withAuth.ts     # 认证中间件
 ├── pages/api/
+│   ├── actions/
+│   │   └── request-action-voucher.ts  # 动作签名 API
 │   └── user/
 │       └── state.ts    # 核心游戏状态 API
 ├── types/
 │   └── api.ts          # TypeScript 类型定义
 └── utils/
-    └── gameLogic.ts    # 游戏核心逻辑
+    ├── gameLogic.ts    # 游戏核心逻辑
+    ├── actionValidation.ts  # 动作验证逻辑
+    └── blockchain.ts   # 区块链交互工具
 ```
 
 ## 📚 核心功能
@@ -85,6 +90,16 @@ zeta-farm-backend/
   - [x] 地块状态实时计算
   - [x] 自动暂停/解封机制
 
+### ✅ 阶段 4: "批准" API（用于合约交互）
+- [x] 智能合约配置和 ABI
+- [x] 区块链交互工具（viem）
+- [x] 游戏动作验证逻辑
+- [x] POST /api/actions/request-action-voucher
+  - [x] 验证种植/收获/浇水/除草/施肥/铲除/抽奖操作
+  - [x] 获取用户 nonce
+  - [x] 生成 EIP-712 签名
+  - [x] 返回签名凭证
+
 ## 🔌 API 文档
 
 ### GET /api/user/state
@@ -109,6 +124,46 @@ Authorization: Bearer <wallet_address>
     "serverTime": 1704715200,
     "offlineEarnings": 120
   }
+}
+```
+
+### POST /api/actions/request-action-voucher
+
+请求动作签名凭证（用于链上操作）。
+
+**请求头：**
+```
+Authorization: <wallet_address>
+```
+
+**请求体：**
+```json
+{
+  "actionType": "plant",
+  "data": {
+    "plotId": 2,
+    "seedId": "seed_0"
+  }
+}
+```
+
+**支持的 actionType：**
+- `plant` - 种植作物
+- `harvest` - 收获作物
+- `water` - 浇水
+- `weed` - 除草
+- `fertilize` - 施肥
+- `shovel` - 铲除作物
+- `gluck_draw` - Gluck 抽奖
+
+**响应示例：**
+```json
+{
+  "signature": "0x1234...",
+  "nonce": "5",
+  "actionType": "plant",
+  "data": "2",
+  "user": "0x..."
 }
 ```
 
@@ -172,6 +227,8 @@ curl -X GET http://localhost:3000/api/user/state \
 
 ## 🔧 开发指南
 
+## 🔧 开发指南
+
 ### 添加新的 API 端点
 
 1. 在 `pages/api/` 下创建新文件
@@ -196,21 +253,75 @@ export default withAuth(handler);
 
 ## 📝 待办事项
 
-### 阶段 4: 游戏操作 API（计划中）
-- [ ] POST /api/plot/plant - 种植作物
-- [ ] POST /api/plot/harvest - 收获作物
+### 阶段 5: 游戏操作 API（计划中）
+- [ ] POST /api/plot/plant - 种植作物（执行链上确认后的状态更新）
+- [ ] POST /api/plot/harvest - 收获作物（执行链上确认后的状态更新）
 - [ ] POST /api/plot/water - 浇水
 - [ ] POST /api/plot/weed - 除草
 - [ ] POST /api/plot/unlock - 解锁地块
 
-### 阶段 5: 商店 API（计划中）
+### 阶段 6: 商店 API（计划中）
 - [ ] POST /api/shop/buy - 购买物品
 - [ ] POST /api/shop/sell - 出售果实
 
 ### 阶段 6: 特殊功能（计划中）
 - [ ] POST /api/checkin - 每日签到
 - [ ] POST /api/lottery/draw - Gluck 抽奖
-- [ ] POST /api/exchange - 金币兑换 ZETA
+- [ ] - [ ] POST /api/exchange - 金币兑换 ZETA
+
+## 🔐 环境变量配置
+
+创建 `.env.local` 文件并配置以下变量：
+
+```env
+# MongoDB
+MONGODB_URI=mongodb+srv://...
+
+# 区块链
+CHAIN_ID=7001
+RPC_URL=https://zetachain-athens-evm.blockpi.network/v1/rpc/public
+
+# 智能合约
+FARM_TREASURY_ADDRESS=0x...
+
+# 后端签名钱包
+SIGNER_PRIVATE_KEY=0x...
+```
+
+## 🎯 工作流程
+
+### 链上操作流程
+
+1. **前端请求签名**：
+   ```typescript
+   const response = await fetch('/api/actions/request-action-voucher', {
+     method: 'POST',
+     headers: { Authorization: walletAddress },
+     body: JSON.stringify({ actionType: 'plant', data: { plotId: 0, seedId: 'seed_0' } })
+   });
+   const { signature, nonce, data } = await response.json();
+   ```
+
+2. **前端调用合约**：
+   ```typescript
+   await farmTreasury.recordActionWithSignature(
+     'plant',
+     data,
+     nonce,
+     signature,
+     { value: parseEther('0.1') } // 0.1 ZETA 税
+   );
+   ```
+
+3. **前端更新后端状态**（阶段 5）：
+   ```typescript
+   await fetch('/api/plot/plant', {
+     method: 'POST',
+     body: JSON.stringify({ plotId: 0, seedId: 'seed_0', txHash })
+   });
+   ```
+
+## 📊 数据库 Schema
 
 ## 🤝 贡献
 
@@ -223,7 +334,9 @@ MIT License
 ---
 
 **技术栈:**
-- Next.js 16
+- Next.js 16 (Pages Router)
 - TypeScript 5
 - MongoDB + Mongoose
+- Viem (区块链交互)
 - Node.js 20+
+- ZetaChain Testnet
