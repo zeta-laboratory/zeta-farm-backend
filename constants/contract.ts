@@ -9,7 +9,7 @@ export const CHAIN_ID = parseInt(process.env.CHAIN_ID || '7001'); // ZetaChain T
 
 /**
  * FarmTreasury 合约 ABI (简化版)
- * 只包含我们需要的函数
+ * 只包含我们需要的函数和事件
  */
 export const FARM_TREASURY_ABI = [
   {
@@ -30,6 +30,16 @@ export const FARM_TREASURY_ABI = [
       { name: 'signature', type: 'bytes' },
     ],
     outputs: [],
+  },
+  {
+    name: 'ActionRecorded',
+    type: 'event',
+    inputs: [
+      { name: 'user', type: 'address', indexed: true },
+      { name: 'actionType', type: 'string', indexed: false },
+      { name: 'data', type: 'uint256', indexed: false },
+      { name: 'timestamp', type: 'uint256', indexed: false },
+    ],
   },
 ] as const;
 

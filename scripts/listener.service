@@ -1,0 +1,37 @@
+# Systemd 服务配置示例
+# 将此文件复制到 /etc/systemd/system/zeta-farm-listener.service
+
+[Unit]
+Description=ZETA Farm Event Listener
+After=network.target
+
+[Service]
+Type=simple
+User=your-user
+WorkingDirectory=/path/to/zeta-farm-backend
+Environment=NODE_ENV=production
+Environment=MONGODB_URI=your_mongodb_uri
+Environment=CHAIN_ID=7001
+Environment=RPC_URL=your_rpc_url
+Environment=FARM_TREASURY_ADDRESS=your_contract_address
+Environment=SIGNER_PRIVATE_KEY=your_private_key
+
+ExecStart=/usr/bin/npm run listener
+
+Restart=always
+RestartSec=10
+
+StandardOutput=append:/var/log/zeta-farm-listener.log
+StandardError=append:/var/log/zeta-farm-listener-error.log
+
+[Install]
+WantedBy=multi-user.target
+
+# 使用方法:
+# 1. 编辑此文件，填入实际的配置
+# 2. sudo cp scripts/listener.service /etc/systemd/system/zeta-farm-listener.service
+# 3. sudo systemctl daemon-reload
+# 4. sudo systemctl enable zeta-farm-listener
+# 5. sudo systemctl start zeta-farm-listener
+# 6. sudo systemctl status zeta-farm-listener
+# 7. sudo journalctl -u zeta-farm-listener -f (查看日志)

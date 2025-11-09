@@ -1,0 +1,47 @@
+# Docker Compose 配置
+# 用于同时运行 API 服务和事件监听器
+# 注意：使用远程 MongoDB，不包含本地 MongoDB 服务
+
+version: '3.8'
+
+services:
+  # Next.js API 服务
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=${MONGODB_URI}
+      - CHAIN_ID=${CHAIN_ID}
+      - RPC_URL=${RPC_URL}
+      - FARM_TREASURY_ADDRESS=${FARM_TREASURY_ADDRESS}
+      - SIGNER_PRIVATE_KEY=${SIGNER_PRIVATE_KEY}
+    restart: unless-stopped
+
+  # 事件监听器
+  listener:
+    build:
+      context: .
+      dockerfile: Dockerfile.listener
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=${MONGODB_URI}
+      - CHAIN_ID=${CHAIN_ID}
+      - RPC_URL=${RPC_URL}
+      - FARM_TREASURY_ADDRESS=${FARM_TREASURY_ADDRESS}
+      - SIGNER_PRIVATE_KEY=${SIGNER_PRIVATE_KEY}
+    restart: unless-stopped
+
+# 使用方法:
+# 1. 创建 .env 文件并填入远程 MongoDB URI 和其他环境变量
+# 2. docker-compose up -d (启动所有服务)
+# 3. docker-compose logs -f listener (查看监听器日志)
+# 4. docker-compose logs -f api (查看 API 日志)
+# 5. docker-compose down (停止所有服务)
+#
+# 注意：
+# - 确保远程 MongoDB 可以从 Docker 容器访问
+# - 如果使用 MongoDB Atlas，请将 Docker 主机 IP 添加到白名单
