@@ -133,7 +133,9 @@ const UserSchema = new Schema<IUser>(
     },
     backpack: {
       type: Schema.Types.Mixed,
-      default: {},
+      default: {
+        seed_0: 1, // 新用户赠送 1 个小麦种子（白萝卜）
+      },
     },
     phrase_letters: {
       type: Schema.Types.Mixed,
