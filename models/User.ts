@@ -92,7 +92,7 @@ class UserModel {
       lastOfflineClaimAt: now,
       last_checkin_date: null,
       backpack: {
-        seed_0: 1, // 新用户赠送 1 个小麦种子
+        seed_0: 1,
       },
       phrase_letters: {},
       redeemed_rewards: [],

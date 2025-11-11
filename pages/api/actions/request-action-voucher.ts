@@ -34,6 +34,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   // 只允许 POST 请求
   if (req.method !== 'POST') {
     return res.status(405).json({
+      success: false,
       error: 'Method not allowed',
       message: '只支持 POST 请求',
     });
@@ -49,6 +50,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     // 1. 验证请求参数
     if (!actionType || typeof actionType !== 'string') {
       return res.status(400).json({
+        success: false,
         error: 'Invalid request',
         message: 'actionType 是必需的',
       });
@@ -56,6 +58,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     if (!data || typeof data !== 'object') {
       return res.status(400).json({
+        success: false,
         error: 'Invalid request',
         message: 'data 是必需的',
       });
@@ -71,6 +74,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     if (!validationResult.valid) {
       return res.status(400).json({
+        success: false,
         error: 'Validation failed',
         message: validationResult.error,
       });
@@ -100,11 +104,13 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
     // 5. 返回签名和相关数据
     const response = {
+      success: true,
       signature,
       nonce: nonce.toString(),
       actionType,
       data: actionData.toString(),
       user: userAddress,
+      timestamp: actionData.toString(), // 添加 timestamp 字段（与 data 相同）
     };
 
     console.log(
@@ -117,6 +123,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     console.error('[POST /api/actions/request-action-voucher] Error:', error);
     
     return res.status(500).json({
+      success: false,
       error: 'Internal server error',
       message: error instanceof Error ? error.message : '生成签名失败',
     });

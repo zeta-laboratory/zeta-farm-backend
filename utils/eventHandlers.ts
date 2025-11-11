@@ -11,15 +11,35 @@ import { generatePlotRequirements } from './gameLogic';
 /**
  * 解包 data 字段
  * plant 操作: plotId (低16位) + seedIndex (高16位)
+ * buySeed/sellFruit: seedIndex/fruitIndex (低16位) + count (高16位)
  * 其他操作: plotId 或 count
  */
-function unpackData(actionType: string, data: bigint): { plotId?: number; seedId?: string; count?: number } {
+function unpackData(actionType: string, data: bigint): { 
+  plotId?: number; 
+  seedId?: string; 
+  fruitId?: string;
+  count?: number;
+  seedIndex?: number;
+  fruitIndex?: number;
+} {
   if (actionType === 'plant') {
     const plotId = Number(data & 0xFFFFn);
     const seedIndex = Number(data >> 16n);
     const seedId = `seed_${seedIndex}`;
-    return { plotId, seedId };
-  } else if (actionType === 'gluck_draw') {
+    return { plotId, seedId, seedIndex };
+  } else if (actionType === 'buySeed') {
+    const seedIndex = Number(data & 0xFFFFn);
+    const count = Number(data >> 16n);
+    const seedId = `seed_${seedIndex}`;
+    return { seedId, seedIndex, count };
+  } else if (actionType === 'sellFruit') {
+    const fruitIndex = Number(data & 0xFFFFn);
+    const count = Number(data >> 16n);
+    const fruitId = `fruit_${fruitIndex}`;
+    return { fruitId, fruitIndex, count };
+  } else if (actionType === 'buyFertilizer') {
+    return { count: Number(data) };
+  } else if (actionType === 'gluck_draw' || actionType === 'draw') {
     return { count: Number(data) };
   } else {
     return { plotId: Number(data) };
@@ -286,6 +306,144 @@ export async function handleGluckDrawAction(
 }
 
 /**
+ * 处理 buySeed 事件
+ */
+export async function handleBuySeedAction(
+  user: IUser,
+  seedId: string,
+  count: number,
+  timestamp: number
+): Promise<void> {
+  console.log(`[handleBuySeedAction] User ${user.wallet_address} buying ${count}x ${seedId}`);
+
+  const seed = SEEDS[seedId];
+  if (!seed) {
+    throw new Error(`Invalid seed: ${seedId}`);
+  }
+
+  // 1. 扣除金币
+  const totalCost = seed.price * count;
+  user.coins -= totalCost;
+
+  // 2. 增加种子到背包
+  if (!user.backpack[seedId]) {
+    user.backpack[seedId] = 0;
+  }
+  user.backpack[seedId] += count;
+
+  console.log(`[handleBuySeedAction] Spent ${totalCost} coins, gained ${count}x ${seedId}`);
+}
+
+/**
+ * 处理 buyFertilizer 事件
+ */
+export async function handleBuyFertilizerAction(
+  user: IUser,
+  count: number,
+  timestamp: number
+): Promise<void> {
+  console.log(`[handleBuyFertilizerAction] User ${user.wallet_address} buying ${count}x fertilizer`);
+
+  // 肥料价格
+  const FERTILIZER_PRICE = 50;
+  const totalCost = FERTILIZER_PRICE * count;
+
+  // 1. 扣除金币
+  user.coins -= totalCost;
+
+  // 2. 增加肥料到背包
+  if (!user.backpack['fertilizer']) {
+    user.backpack['fertilizer'] = 0;
+  }
+  user.backpack['fertilizer'] += count;
+
+  console.log(`[handleBuyFertilizerAction] Spent ${totalCost} coins, gained ${count}x fertilizer`);
+}
+
+/**
+ * 处理 sellFruit 事件
+ */
+export async function handleSellFruitAction(
+  user: IUser,
+  fruitId: string,
+  count: number,
+  timestamp: number
+): Promise<void> {
+  console.log(`[handleSellFruitAction] User ${user.wallet_address} selling ${count}x ${fruitId}`);
+
+  // 获取对应的种子价格（水果价格 = 种子价格 * 1.5）
+  const seedIndex = fruitId.split('_')[1];
+  const seedId = `seed_${seedIndex}`;
+  const seed = SEEDS[seedId];
+  
+  if (!seed) {
+    throw new Error(`Invalid fruit: ${fruitId}`);
+  }
+
+  const fruitPrice = Math.floor(seed.price * 1.5);
+  const totalEarnings = fruitPrice * count;
+
+  // 1. 扣除水果
+  if (!user.backpack[fruitId]) {
+    user.backpack[fruitId] = 0;
+  }
+  user.backpack[fruitId] -= count;
+
+  // 2. 增加金币
+  user.coins += totalEarnings;
+
+  console.log(`[handleSellFruitAction] Sold ${count}x ${fruitId} for ${totalEarnings} coins`);
+}
+
+/**
+ * 处理 unlockPlot 事件
+ */
+export async function handleUnlockPlotAction(
+  user: IUser,
+  plotId: number,
+  timestamp: number
+): Promise<void> {
+  console.log(`[handleUnlockPlotAction] User ${user.wallet_address} unlocking plot ${plotId}`);
+
+  const plot = user.plots_list[plotId];
+  if (!plot) {
+    throw new Error(`Plot ${plotId} not found`);
+  }
+
+  // 解锁地块
+  plot.unlocked = true;
+
+  // 扣除金币（这里简化处理，实际应该从常量中获取解锁价格）
+  const UNLOCK_COST = 100; // 临时硬编码
+  user.coins -= UNLOCK_COST;
+
+  console.log(`[handleUnlockPlotAction] Plot ${plotId} unlocked, spent ${UNLOCK_COST} coins`);
+}
+
+/**
+ * 处理 checkin 事件
+ */
+export async function handleCheckinAction(
+  user: IUser,
+  timestamp: number
+): Promise<void> {
+  console.log(`[handleCheckinAction] User ${user.wallet_address} checking in`);
+
+  // 签到奖励：金币和奖券
+  const CHECKIN_COINS = 50;
+  const CHECKIN_TICKETS = 1;
+
+  user.coins += CHECKIN_COINS;
+  user.tickets += CHECKIN_TICKETS;
+
+  // 更新签到日期
+  const today = new Date(timestamp * 1000).toISOString().split('T')[0];
+  user.last_checkin_date = today;
+
+  console.log(`[handleCheckinAction] Gained ${CHECKIN_COINS} coins and ${CHECKIN_TICKETS} ticket`);
+}
+
+/**
  * 计算等级（基于经验值）
  */
 function calculateLevel(exp: number): number {
@@ -316,6 +474,7 @@ export async function onActionRecorded(
   console.log(`[onActionRecorded] Processing ${actionType} event:`, unpacked);
 
   switch (actionType) {
+    // 地块操作
     case 'plant':
       if (unpacked.plotId !== undefined && unpacked.seedId) {
         await handlePlantAction(user, unpacked.plotId, unpacked.seedId, timestamp);
@@ -352,10 +511,52 @@ export async function onActionRecorded(
       }
       break;
 
+    // 商店操作
+    case 'buySeed':
+      if (unpacked.seedId && unpacked.count !== undefined) {
+        await handleBuySeedAction(user, unpacked.seedId, unpacked.count, timestamp);
+      }
+      break;
+
+    case 'buyFertilizer':
+      if (unpacked.count !== undefined) {
+        await handleBuyFertilizerAction(user, unpacked.count, timestamp);
+      }
+      break;
+
+    case 'sellFruit':
+      if (unpacked.fruitId && unpacked.count !== undefined) {
+        await handleSellFruitAction(user, unpacked.fruitId, unpacked.count, timestamp);
+      }
+      break;
+
+    // 地块管理
+    case 'unlockPlot':
+      if (unpacked.plotId !== undefined) {
+        await handleUnlockPlotAction(user, unpacked.plotId, timestamp);
+      }
+      break;
+
+    // 签到和抽奖
+    case 'checkin':
+      await handleCheckinAction(user, timestamp);
+      break;
+
+    case 'draw':
     case 'gluck_draw':
       if (unpacked.count !== undefined) {
         await handleGluckDrawAction(user, unpacked.count, timestamp);
       }
+      break;
+
+    // 其他操作（暂时忽略）
+    case 'pesticide':
+    case 'protect':
+    case 'buyPet':
+    case 'subscribeRobot':
+    case 'exchange':
+    case 'redeemReward':
+      console.log(`[onActionRecorded] Action ${actionType} not yet implemented`);
       break;
 
     default:
@@ -370,9 +571,11 @@ export async function onActionRecorded(
         coins: user.coins,
         exp: user.exp,
         level: user.level,
+        tickets: user.tickets,
         backpack: user.backpack,
         phrase_letters: user.phrase_letters,
         plots_list: user.plots_list,
+        last_checkin_date: user.last_checkin_date,
       }
     }
   );

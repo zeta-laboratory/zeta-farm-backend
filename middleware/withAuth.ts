@@ -20,6 +20,11 @@ export type ApiHandler = (
 export function withAuth(handler: ApiHandler) {
   return async (req: NextApiRequest, res: NextApiResponse) => {
     try {
+      // 0. 处理 OPTIONS 预检请求（CORS）
+      if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+      }
+
       // 1. 从 Authorization header 获取钱包地址
       const authHeader = req.headers.authorization;
       
