@@ -81,8 +81,11 @@ export function calculatePlotStatus(
     req => effectiveElapsedTime >= req.time && !req.done
   );
 
-  // 3. 检查是否有虫害（没有保护或保护已过期）
-  const hasPests = !plot.protectedUntil || plot.protectedUntil < now;
+  // 3. 虫害检查
+  // 注意：虫害是客户端随机事件（0.4%概率），不影响生长速度
+  // 后端不处理虫害逻辑，由前端管理
+  // protectedUntil 字段预留给未来的杀虫剂功能
+  const hasPests = false;
 
   // 4. 计算生长阶段时间（考虑肥料效果）
   // 注意：stages 是三个累计时间点，不是时长
@@ -99,19 +102,23 @@ export function calculatePlotStatus(
   let progress: number;
   let isReady: boolean;
 
+  // 修复: 与前端保持一致 - 0~s1=SEED, s1~s2=SPROUT, s2~s3=GROWING
   if (effectiveElapsedTime < 0) {
     stage = PlotStage.SEED;
     progress = 0;
     isReady = false;
   } else if (effectiveElapsedTime < stage0End) {
-    stage = PlotStage.SPROUT;
+    // 修复: 0~s1 应该是 SEED 阶段
+    stage = PlotStage.SEED;
     progress = (effectiveElapsedTime / stage0End) * 100;
     isReady = false;
   } else if (effectiveElapsedTime < stage1End) {
-    stage = PlotStage.GROWING;
+    // 修复: s1~s2 应该是 SPROUT 阶段
+    stage = PlotStage.SPROUT;
     progress = ((effectiveElapsedTime - stage0End) / (stage1End - stage0End)) * 100;
     isReady = false;
   } else if (effectiveElapsedTime < stage2End) {
+    // s2~s3 是 GROWING 阶段
     stage = PlotStage.GROWING;
     progress = ((effectiveElapsedTime - stage1End) / (stage2End - stage1End)) * 100;
     isReady = false;

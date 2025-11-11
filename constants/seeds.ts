@@ -250,7 +250,8 @@ export function getTotalGrowTime(seedId: string): number {
 }
 
 /**
- * 获取当前生长阶段 (0=发芽, 1=生长, 2=成熟, 3=枯萎, -1=尚未种植)
+ * 获取当前生长阶段 (0=种子SEED, 1=发芽SPROUT, 2=生长GROWING, 3=成熟RIPE, 4=枯萎WITHER, -1=尚未种植)
+ * 与前端保持一致: 0~s1=SEED(0), s1~s2=SPROUT(1), s2~s3=GROWING(2), s3~wither=RIPE(3), >wither=WITHER(4)
  */
 export function getGrowthStage(
   seedId: string,
@@ -269,14 +270,16 @@ export function getGrowthStage(
   const stages = seed.stages.map(s => Math.floor(s * fertilizerBonus));
   
   // stages 是三个累计时间点，不是时长
-  const stage0End = stages[0];
-  const stage1End = stages[1];
-  const stage2End = stages[2];
+  const stage0End = stages[0];  // SEED 结束点
+  const stage1End = stages[1];  // SPROUT 结束点
+  const stage2End = stages[2];  // GROWING 结束点 (成熟时间)
   const witherStart = stage2End + seed.witherTime;
 
-  if (elapsed < stage0End) return 0;
-  if (elapsed < stage1End) return 1;
-  if (elapsed < stage2End) return 2;
-  if (elapsed < witherStart) return 2; // 成熟但未枯萎
-  return 3; // 枯萎
+  // 修复: 与前端保持一致的阶段划分
+  if (elapsed < 0) return 0;           // SEED
+  if (elapsed < stage0End) return 0;   // SEED (0~s1)
+  if (elapsed < stage1End) return 1;   // SPROUT (s1~s2)
+  if (elapsed < stage2End) return 2;   // GROWING (s2~s3)
+  if (elapsed < witherStart) return 3; // RIPE (s3~wither)
+  return 4;                            // WITHER (>wither)
 }
