@@ -286,8 +286,8 @@ export function validateBuySeedAction(
     return { valid: false, error: '无效的种子 ID' };
   }
 
-  // 验证金币余额
-  const totalCost = seed.price * count;
+  // 验证金币余额 - 使用 cost (种子成本)，而不是 price (果实售价)
+  const totalCost = seed.cost * count;
   if (user.coins < totalCost) {
     return { 
       valid: false, 

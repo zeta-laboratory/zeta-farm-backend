@@ -85,12 +85,13 @@ export function calculatePlotStatus(
   const hasPests = !plot.protectedUntil || plot.protectedUntil < now;
 
   // 4. 计算生长阶段时间（考虑肥料效果）
+  // 注意：stages 是三个累计时间点，不是时长
   const fertilizerMultiplier = plot.fertilized ? 0.8 : 1;
   const stages = seed.stages.map(s => Math.floor(s * fertilizerMultiplier));
   
-  const stage0End = stages[0];
-  const stage1End = stages[0] + stages[1];
-  const stage2End = stages[0] + stages[1] + stages[2];
+  const stage0End = stages[0];  // 第一个阶段的结束时间点
+  const stage1End = stages[1];  // 第二个阶段的结束时间点
+  const stage2End = stages[2];  // 第三个阶段的结束时间点（成熟时间）
   const witherStart = stage2End + seed.witherTime;
 
   // 5. 确定当前阶段
@@ -108,11 +109,11 @@ export function calculatePlotStatus(
     isReady = false;
   } else if (effectiveElapsedTime < stage1End) {
     stage = PlotStage.GROWING;
-    progress = ((effectiveElapsedTime - stage0End) / stages[1]) * 100;
+    progress = ((effectiveElapsedTime - stage0End) / (stage1End - stage0End)) * 100;
     isReady = false;
   } else if (effectiveElapsedTime < stage2End) {
     stage = PlotStage.GROWING;
-    progress = ((effectiveElapsedTime - stage1End) / stages[2]) * 100;
+    progress = ((effectiveElapsedTime - stage1End) / (stage2End - stage1End)) * 100;
     isReady = false;
   } else if (effectiveElapsedTime < witherStart) {
     stage = PlotStage.RIPE;
@@ -223,8 +224,9 @@ export function generatePlotRequirements(
   }
 
   // 计算总生长时间
+  // 注意：stages[2] 就是总成熟时间，不是累加
   const fertilizerMultiplier = fertilized ? 0.8 : 1;
-  const totalGrowTime = seed.stages.reduce((sum, s) => sum + s, 0) * fertilizerMultiplier;
+  const totalGrowTime = seed.stages[2] * fertilizerMultiplier;
 
   // 生成浇水需求时间点（均匀分布）
   const waterReqs: Array<{ time: number; done: boolean }> = [];

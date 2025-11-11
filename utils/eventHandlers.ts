@@ -321,8 +321,8 @@ export async function handleBuySeedAction(
     throw new Error(`Invalid seed: ${seedId}`);
   }
 
-  // 1. 扣除金币
-  const totalCost = seed.price * count;
+  // 1. 扣除金币 - 使用 cost (种子成本)，而不是 price (果实售价)
+  const totalCost = seed.cost * count;
   user.coins -= totalCost;
 
   // 2. 增加种子到背包
