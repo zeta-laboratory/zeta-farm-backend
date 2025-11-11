@@ -1,4 +1,5 @@
-import mongoose, { Schema, Document, Model } from 'mongoose';
+import { ObjectId, Collection } from 'mongodb';
+import connectDB from '@/lib/mongodb';
 
 // 地块对象的接口
 export interface IPlot {
@@ -15,7 +16,8 @@ export interface IPlot {
 }
 
 // 用户文档接口
-export interface IUser extends Document {
+export interface IUser {
+  _id?: ObjectId;
   wallet_address: string;
   zeta: string;
   tickets: number;
@@ -33,159 +35,118 @@ export interface IUser extends Document {
   updatedAt: Date;
 }
 
-// 地块子 Schema
-const PlotSchema = new Schema<IPlot>(
-  {
-    plot_index: {
-      type: Number,
-      required: true,
-    },
-    unlocked: {
-      type: Boolean,
-      default: false,
-    },
-    seedId: {
-      type: String,
-      default: null,
-    },
-    plantedAt: {
-      type: Number,
-      default: null,
-    },
-    pausedDuration: {
-      type: Number,
-      default: 0,
-    },
-    pausedAt: {
-      type: Number,
-      default: null,
-    },
-    waterRequirements: {
-      type: [
-        {
-          time: { type: Number, required: true },
-          done: { type: Boolean, required: true },
-        },
-      ],
-      default: [],
-    },
-    weedRequirements: {
-      type: [
-        {
-          time: { type: Number, required: true },
-          done: { type: Boolean, required: true },
-        },
-      ],
-      default: [],
-    },
-    fertilized: {
-      type: Boolean,
-      default: false,
-    },
-    protectedUntil: {
-      type: Number,
-      default: null,
-    },
-  },
-  { _id: false }
-);
+// 初始化 18 个地块
+function initializePlots(): IPlot[] {
+  return Array.from({ length: 18 }, (_, index) => ({
+    plot_index: index,
+    unlocked: index === 0, // 只有第一个地块默认解锁
+    seedId: null,
+    plantedAt: null,
+    pausedDuration: 0,
+    pausedAt: null,
+    waterRequirements: [],
+    weedRequirements: [],
+    fertilized: false,
+    protectedUntil: null,
+  }));
+}
 
-// 用户 Schema
-const UserSchema = new Schema<IUser>(
-  {
-    wallet_address: {
-      type: String,
-      required: true,
-      unique: true,
-      index: true,
-    },
-    zeta: {
-      type: String,
-      default: '0.00',
-    },
-    tickets: {
-      type: Number,
-      default: 0,
-    },
-    coins: {
-      type: Number,
-      default: 1000,
-    },
-    exp: {
-      type: Number,
-      default: 0,
-    },
-    level: {
-      type: Number,
-      default: 1,
-    },
-    pet_list: {
-      type: [String],
-      default: [],
-    },
-    lastOfflineClaimAt: {
-      type: Date,
-      default: Date.now,
-    },
-    last_checkin_date: {
-      type: String,
-      default: null,
-    },
-    backpack: {
-      type: Schema.Types.Mixed,
-      default: {
-        seed_0: 1, // 新用户赠送 1 个小麦种子（白萝卜）
+// 获取 Users 集合
+async function getUsersCollection(): Promise<Collection<IUser>> {
+  const { db } = await connectDB();
+  return db.collection<IUser>('users');
+}
+
+// User 操作类
+class UserModel {
+  // 创建索引
+  static async createIndexes() {
+    const collection = await getUsersCollection();
+    await collection.createIndex({ wallet_address: 1 }, { unique: true });
+  }
+
+  // 查找用户
+  static async findOne(query: Partial<IUser>) {
+    const collection = await getUsersCollection();
+    return collection.findOne(query);
+  }
+
+  // 根据钱包地址查找用户
+  static async findByWalletAddress(wallet_address: string) {
+    return this.findOne({ wallet_address: wallet_address.toLowerCase() });
+  }
+
+  // 创建新用户
+  static async createNewUser(wallet_address: string): Promise<IUser & { _id: ObjectId }> {
+    const collection = await getUsersCollection();
+    const now = new Date();
+    
+    const newUser: Omit<IUser, '_id'> = {
+      wallet_address: wallet_address.toLowerCase(),
+      zeta: '0.00',
+      tickets: 0,
+      coins: 1000,
+      exp: 0,
+      level: 1,
+      pet_list: [],
+      lastOfflineClaimAt: now,
+      last_checkin_date: null,
+      backpack: {
+        seed_0: 1, // 新用户赠送 1 个小麦种子
       },
-    },
-    phrase_letters: {
-      type: Schema.Types.Mixed,
-      default: {},
-    },
-    redeemed_rewards: {
-      type: [String],
-      default: [],
-    },
-    plots_list: {
-      type: [PlotSchema],
-      default: [],
-    },
-  },
-  {
-    timestamps: true,
+      phrase_letters: {},
+      redeemed_rewards: [],
+      plots_list: initializePlots(),
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const result = await collection.insertOne(newUser as IUser);
+    return { ...newUser, _id: result.insertedId } as IUser & { _id: ObjectId };
   }
-);
 
-// **任务 4: 新用户创建时自动初始化 18 个地块**
-UserSchema.pre('save', function (next) {
-  // 只在新文档创建时初始化地块
-  if (this.isNew && this.plots_list.length === 0) {
-    this.plots_list = Array.from({ length: 18 }, (_, index) => ({
-      plot_index: index,
-      unlocked: index === 0, // 只有第一个地块默认解锁
-      seedId: null,
-      plantedAt: null,
-      pausedDuration: 0,
-      pausedAt: null,
-      waterRequirements: [],
-      weedRequirements: [],
-      fertilized: false,
-      protectedUntil: null,
-    }));
+  // 更新用户
+  static async updateOne(
+    query: Partial<IUser>,
+    update: any
+  ) {
+    const collection = await getUsersCollection();
+    
+    // 自动更新 updatedAt
+    if (!update.$set) {
+      update.$set = {};
+    }
+    update.$set.updatedAt = new Date();
+    
+    return collection.updateOne(query, update);
   }
-  next();
-});
 
-// 静态方法：创建新用户（可选的辅助方法）
-UserSchema.statics.createNewUser = async function (wallet_address: string) {
-  const user = new this({
-    wallet_address,
-  });
-  await user.save();
-  return user;
-};
+  // 查找或创建用户
+  static async findOneOrCreate(wallet_address: string): Promise<IUser> {
+    let user = await this.findByWalletAddress(wallet_address);
+    
+    if (!user) {
+      user = await this.createNewUser(wallet_address);
+    }
+    
+    return user as IUser;
+  }
 
-// 导出模型
-const User: Model<IUser> =
-  mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
+  // 查找多个用户
+  static async find(query: Partial<IUser> = {}) {
+    const collection = await getUsersCollection();
+    return collection.find(query).toArray();
+  }
 
-export default User;
+  // 删除用户
+  static async deleteOne(query: Partial<IUser>) {
+    const collection = await getUsersCollection();
+    return collection.deleteOne(query);
+  }
+}
+
+// 初始化索引（应用启动时调用一次）
+UserModel.createIndexes().catch(console.error);
+
+export default UserModel;
+

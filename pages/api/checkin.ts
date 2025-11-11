@@ -16,6 +16,7 @@ import { NextApiResponse } from 'next';
 import { withAuth } from '@/middleware/withAuth';
 import { AuthenticatedRequest } from '@/types/api';
 import { performDailyCheckin, getTodayDateString, hasCheckedInToday } from '@/constants';
+import User from '@/models/User';
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -42,10 +43,17 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     const reward = performDailyCheckin();
 
     // 3. 原子更新：增加金币，更新签到日期
-    user.coins += reward;
-    user.last_checkin_date = today;
+    const updatedCoins = user.coins + reward;
 
-    await user.save();
+    await User.updateOne(
+      { wallet_address: user.wallet_address },
+      {
+        $set: {
+          coins: updatedCoins,
+          last_checkin_date: today,
+        }
+      }
+    );
 
     console.log(
       `[POST /api/checkin] User ${user.wallet_address} checked in, reward: ${reward} coins`
@@ -54,7 +62,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     return res.status(200).json({
       success: true,
       reward,
-      totalCoins: user.coins,
+      totalCoins: updatedCoins,
       checkinDate: today,
       message: `签到成功！获得 ${reward} 金币`,
     });

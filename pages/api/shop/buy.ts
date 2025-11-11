@@ -23,6 +23,7 @@ import { NextApiResponse } from 'next';
 import { withAuth } from '@/middleware/withAuth';
 import { AuthenticatedRequest } from '@/types/api';
 import { SEEDS, FERTILIZER_CONFIG } from '@/constants';
+import User from '@/models/User';
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -87,14 +88,23 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     // 5. 原子更新：扣除金币，增加物品
-    user.coins -= totalCost;
-
-    if (!user.backpack[itemId]) {
-      user.backpack[itemId] = 0;
+    const updatedCoins = user.coins - totalCost;
+    const updatedBackpack = { ...user.backpack };
+    
+    if (!updatedBackpack[itemId]) {
+      updatedBackpack[itemId] = 0;
     }
-    user.backpack[itemId] += amount;
+    updatedBackpack[itemId] += amount;
 
-    await user.save();
+    await User.updateOne(
+      { wallet_address: user.wallet_address },
+      {
+        $set: {
+          coins: updatedCoins,
+          backpack: updatedBackpack,
+        }
+      }
+    );
 
     console.log(
       `[POST /api/shop/buy] User ${user.wallet_address} bought ${amount}x ${itemName} for ${totalCost} coins`
@@ -106,8 +116,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       itemName,
       amount,
       totalCost,
-      remainingCoins: user.coins,
-      backpack: user.backpack,
+      remainingCoins: updatedCoins,
+      backpack: updatedBackpack,
     });
 
   } catch (error) {

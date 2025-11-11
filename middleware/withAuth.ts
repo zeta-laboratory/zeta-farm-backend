@@ -51,28 +51,15 @@ export function withAuth(handler: ApiHandler) {
       // 2. 连接数据库
       await connectDB();
 
-      // 3. 查找用户
-      let user = await User.findOne({ 
-        wallet_address: normalizedAddress 
-      });
+      // 3. 查找或创建用户
+      const user = await User.findOneOrCreate(normalizedAddress);
 
-      // 4. 如果用户不存在，创建新用户
-      if (!user) {
-        console.log(`[withAuth] Creating new user: ${normalizedAddress}`);
-        
-        user = await User.create({
-          wallet_address: normalizedAddress,
-          // 其他字段将使用 Schema 默认值
-          // plots_list 将通过 pre('save') 钩子自动初始化
-        });
+      console.log(`[withAuth] User loaded: ${normalizedAddress}`);
 
-        console.log(`[withAuth] New user created with ${user.plots_list.length} plots`);
-      }
-
-      // 5. 将用户对象附加到 request
+      // 4. 将用户对象附加到 request
       (req as AuthenticatedRequest).user = user;
 
-      // 6. 调用实际的 API handler
+      // 5. 调用实际的 API handler
       return handler(req as AuthenticatedRequest, res);
 
     } catch (error) {

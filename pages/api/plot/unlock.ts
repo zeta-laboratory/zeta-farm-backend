@@ -22,6 +22,7 @@ import { NextApiResponse } from 'next';
 import { withAuth } from '@/middleware/withAuth';
 import { AuthenticatedRequest } from '@/types/api';
 import { PLOT_PRICES } from '@/constants';
+import User from '@/models/User';
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -89,10 +90,19 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     // 6. 原子更新：扣除金币，解锁地块
-    user.coins -= plotConfig.unlockCost;
-    plot.unlocked = true;
+    const updatedCoins = user.coins - plotConfig.unlockCost;
+    const updatedPlotsList = [...user.plots_list];
+    updatedPlotsList[plotIndex] = { ...plot, unlocked: true };
 
-    await user.save();
+    await User.updateOne(
+      { wallet_address: user.wallet_address },
+      {
+        $set: {
+          coins: updatedCoins,
+          plots_list: updatedPlotsList,
+        }
+      }
+    );
 
     console.log(
       `[POST /api/plot/unlock] User ${user.wallet_address} unlocked plot ${plotIndex} for ${plotConfig.unlockCost} coins`
@@ -103,7 +113,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       plotIndex,
       cost: plotConfig.unlockCost,
       levelRequired: plotConfig.levelReq,
-      remainingCoins: user.coins,
+      remainingCoins: updatedCoins,
       message: `成功解锁地块 ${plotIndex}！`,
     });
 

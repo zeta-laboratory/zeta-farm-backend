@@ -1,12 +1,9 @@
-import mongoose from 'mongoose';
+import { MongoClient, Db } from 'mongodb';
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-  throw new Error(
-    'Please define the MONGODB_URI environment variable inside .env.local'
-  );
-}
+// NOTE: do not read or throw on MONGODB_URI at module import time.
+// This file may be imported before dotenv runs (for example when the
+// script loads), which would cause an immediate crash. Instead, read
+// process.env inside connectDB() and throw there if missing.
 
 /**
  * Global is used here to maintain a cached connection across hot reloads
@@ -14,44 +11,60 @@ if (!MONGODB_URI) {
  * during API Route usage.
  */
 interface CachedConnection {
-  conn: typeof mongoose | null;
-  promise: Promise<typeof mongoose> | null;
+  client: MongoClient | null;
+  db: Db | null;
+  promise: Promise<{ client: MongoClient; db: Db }> | null;
 }
 
 declare global {
   // eslint-disable-next-line no-var
-  var mongoose: CachedConnection | undefined;
+  var mongodb: CachedConnection | undefined;
 }
 
-let cached: CachedConnection = global.mongoose || { conn: null, promise: null };
+let cached: CachedConnection = global.mongodb || { client: null, db: null, promise: null };
 
-if (!global.mongoose) {
-  global.mongoose = cached;
+if (!global.mongodb) {
+  global.mongodb = cached;
 }
 
-async function connectDB(): Promise<typeof mongoose> {
-  if (cached.conn) {
-    return cached.conn;
+async function connectDB(): Promise<{ client: MongoClient; db: Db }> {
+  const MONGODB_URI = process.env.MONGODB_URI;
+
+  if (!MONGODB_URI) {
+    throw new Error('Please define the MONGODB_URI environment variable');
+  }
+
+  console.log('Connecting to MongoDB...', MONGODB_URI);
+  if (cached.client && cached.db) {
+    return { client: cached.client, db: cached.db };
   }
 
   if (!cached.promise) {
     const opts = {
-      bufferCommands: false,
+      maxPoolSize: 10,
+      minPoolSize: 5,
+      serverSelectionTimeoutMS: 10000,
     };
 
-    cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongoose) => {
-      return mongoose;
+    cached.promise = MongoClient.connect(MONGODB_URI!, opts).then((client) => {
+      // If the URI does not include a database name, client.db() will
+      // default to the admin database. Prefer explicit DB in the URI.
+      const db = client.db();
+      console.log('✅ MongoDB connected successfully');
+      return { client, db };
     });
   }
 
   try {
-    cached.conn = await cached.promise;
+    const result = await cached.promise;
+    cached.client = result.client;
+    cached.db = result.db;
+    return result;
   } catch (e) {
     cached.promise = null;
+    console.error('❌ MongoDB connection failed:', e);
     throw e;
   }
-
-  return cached.conn;
 }
 
 export default connectDB;

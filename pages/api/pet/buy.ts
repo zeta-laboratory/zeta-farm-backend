@@ -24,6 +24,7 @@ import { NextApiResponse } from 'next';
 import { withAuth } from '@/middleware/withAuth';
 import { AuthenticatedRequest } from '@/types/api';
 import { PETS, calculateOfflineEarnings } from '@/constants';
+import User from '@/models/User';
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -85,15 +86,20 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     }
 
     // 5. 原子更新：扣除金币，添加宠物，更新离线收益时间
-    user.coins -= petConfig.price;
-    user.pet_list.push(petId);
-    
-    // 如果这是第一只宠物，初始化 lastOfflineClaimAt
-    if (user.pet_list.length === 1) {
-      user.lastOfflineClaimAt = new Date();
-    }
+    const updatedCoins = user.coins - petConfig.price;
+    const updatedPetList = [...user.pet_list, petId];
+    const updatedLastOfflineClaimAt = user.pet_list.length === 0 ? new Date() : user.lastOfflineClaimAt;
 
-    await user.save();
+    await User.updateOne(
+      { wallet_address: user.wallet_address },
+      {
+        $set: {
+          coins: updatedCoins,
+          pet_list: updatedPetList,
+          lastOfflineClaimAt: updatedLastOfflineClaimAt,
+        }
+      }
+    );
 
     console.log(
       `[POST /api/pet/buy] User ${user.wallet_address} bought pet ${petId} (${petConfig.name}) for ${petConfig.price} coins`
@@ -104,9 +110,9 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       petId,
       petName: petConfig.name,
       price: petConfig.price,
-      remainingCoins: user.coins,
+      remainingCoins: updatedCoins,
       offlineEarnings,
-      pet_list: user.pet_list,
+      pet_list: updatedPetList,
       message: `成功购买宠物 ${petConfig.name}！${offlineEarnings > 0 ? `（已结算离线收益 ${offlineEarnings} 金币）` : ''}`,
     });
 

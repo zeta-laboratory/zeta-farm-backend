@@ -10,11 +10,18 @@
  * tsx scripts/listener.ts
  */
 
-import connectDB from '../lib/mongodb';
-import User from '../models/User';
-import { publicClient } from '../utils/blockchain';
-import { FARM_TREASURY_ADDRESS, FARM_TREASURY_ABI } from '../constants/contract';
-import { onActionRecorded } from '../utils/eventHandlers';
+import { resolve } from 'path';
+
+// Load environment variables as early as possible using require() so
+// dotenv runs before any other module that reads process.env.
+require('dotenv').config({ path: resolve(__dirname, '.env') });
+
+// Require modules after dotenv to avoid import-time env reads.
+const connectDB = require('../lib/mongodb').default;
+const User = require('../models/User').default;
+const { publicClient } = require('../utils/blockchain');
+const { FARM_TREASURY_ADDRESS, FARM_TREASURY_ABI } = require('../constants/contract');
+const { onActionRecorded } = require('../utils/eventHandlers');
 
 /**
  * 启动监听器
@@ -103,15 +110,11 @@ async function processEvent(log: any) {
   console.log(`Timestamp: ${timestamp.toString()}`);
   console.log('========================================\n');
 
-  // 1. 查找用户
+  // 1. 查找或创建用户
   const userAddress = (user as string).toLowerCase();
-  let userDoc = await User.findOne({ wallet_address: userAddress });
+  const userDoc = await User.findOneOrCreate(userAddress);
 
-  if (!userDoc) {
-    console.log(`⚠️  User ${userAddress} not found in database, creating...`);
-    userDoc = await User.create({ wallet_address: userAddress });
-    console.log(`✅ User ${userAddress} created`);
-  }
+  console.log(`✅ User ${userAddress} loaded`);
 
   // 2. 处理事件
   try {

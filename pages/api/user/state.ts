@@ -27,6 +27,7 @@ import {
   calculatePlotStatus,
   autoHandlePlotPause,
 } from '@/utils/gameLogic';
+import User from '@/models/User';
 
 async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
   // 只允许 GET 请求
@@ -123,7 +124,18 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     // ========== [关键逻辑 3] 保存并响应 ==========
 
     // 保存所有更新（宠物收益、地块暂停状态等）
-    await user.save();
+    if (earnedCoins > 0) {
+      await User.updateOne(
+        { wallet_address: user.wallet_address },
+        {
+          $set: {
+            coins: user.coins,
+            lastOfflineClaimAt: user.lastOfflineClaimAt,
+            plots_list: user.plots_list,
+          }
+        }
+      );
+    }
 
     // 构建响应数据
     const responseData = {

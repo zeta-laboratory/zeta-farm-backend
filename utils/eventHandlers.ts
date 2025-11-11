@@ -4,6 +4,7 @@
  */
 
 import { IUser } from '@/models/User';
+import User from '@/models/User';
 import { SEEDS, performGluck, mergeGluckResults } from '@/constants';
 import { generatePlotRequirements } from './gameLogic';
 
@@ -362,6 +363,18 @@ export async function onActionRecorded(
   }
 
   // 保存用户数据
-  await user.save();
+  await User.updateOne(
+    { wallet_address: user.wallet_address },
+    {
+      $set: {
+        coins: user.coins,
+        exp: user.exp,
+        level: user.level,
+        backpack: user.backpack,
+        phrase_letters: user.phrase_letters,
+        plots_list: user.plots_list,
+      }
+    }
+  );
   console.log(`[onActionRecorded] User ${user.wallet_address} data saved successfully`);
 }
