@@ -51,8 +51,9 @@ function unpackData(actionType: string, data: bigint): {
  * @param probability - 掉落概率 (0-1)
  * @returns 掉落的字母或 null
  */
-function randomLetterDrop(probability: number = 0.1): string | null {
-  const letters = ['Z', 'E', 'T', 'A'];
+function randomLetterDrop(probability: number = 0.5): string | null {
+  // 26个英文字母 A-Z
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
   if (Math.random() < probability) {
     return letters[Math.floor(Math.random() * letters.length)];
   }
@@ -135,14 +136,16 @@ export async function handleHarvestAction(
   const fruitCount = 1;
   user.backpack[fruitId] += fruitCount;
 
-  // 3. 随机掉落字母 (10% 概率)
-  const letter = randomLetterDrop(0.1);
+  // 3. 随机掉落字母 (50% 概率，26个英文字母中的1个)
+  const letter = randomLetterDrop(0.5);
   if (letter) {
     if (!user.phrase_letters[letter]) {
       user.phrase_letters[letter] = 0;
     }
     user.phrase_letters[letter]++;
-    console.log(`[handleHarvestAction] Letter dropped: ${letter}`);
+    console.log(`[handleHarvestAction] 🎉 Letter dropped for user ${user.wallet_address}: ${letter} (total: ${user.phrase_letters[letter]})`);
+  } else {
+    console.log(`[handleHarvestAction] No letter dropped for user ${user.wallet_address} this time (50% chance)`);
   }
 
   // 4. 更新等级
