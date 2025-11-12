@@ -1,6 +1,7 @@
 /**
  * 宠物配置
  * 每个宠物的属性和离线收益
+ * 设计理念：90天静态回本
  */
 
 export interface PetConfig {
@@ -10,40 +11,34 @@ export interface PetConfig {
 }
 
 export const PETS: Record<string, PetConfig> = {
-  cat: {
-    name: '小猫',
+  chick: {
+    name: '小鸡',
+    price: 100,
+    coinsPerHour: 0.046296, // 约1.1111金币/日，90天回本
+  },
+
+  rabbit: {
+    name: '兔子',
     price: 500,
-    coinsPerHour: 50,
+    coinsPerHour: 0.231481, // 约5.5556金币/日，90天回本
   },
 
   dog: {
     name: '小狗',
-    price: 1000,
-    coinsPerHour: 120,
+    price: 2000,
+    coinsPerHour: 0.925926, // 约22.2222金币/日，90天回本
   },
 
-  rabbit: {
-    name: '小兔子',
-    price: 1500,
-    coinsPerHour: 200,
+  fox: {
+    name: '狐狸',
+    price: 5000,
+    coinsPerHour: 2.314815, // 约55.5556金币/日，90天回本
   },
 
-  pig: {
-    name: '小猪',
-    price: 2500,
-    coinsPerHour: 350,
-  },
-
-  cow: {
-    name: '奶牛',
-    price: 4000,
-    coinsPerHour: 600,
-  },
-
-  dragon: {
-    name: '小龙',
-    price: 8000,
-    coinsPerHour: 1200,
+  panda: {
+    name: '熊猫',
+    price: 10000,
+    coinsPerHour: 4.62963, // 约111.1111金币/日，90天回本
   },
 };
 

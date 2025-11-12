@@ -12,6 +12,7 @@ import { generatePlotRequirements } from './gameLogic';
  * 解包 data 字段
  * plant 操作: plotId (低16位) + seedIndex (高16位)
  * buySeed/sellFruit: seedIndex/fruitIndex (低16位) + count (高16位)
+ * buyPet: petIndex (低16位)，其中 petIndex 映射到 petId
  * 其他操作: plotId 或 count
  */
 function unpackData(actionType: string, data: bigint): { 
@@ -21,6 +22,8 @@ function unpackData(actionType: string, data: bigint): {
   count?: number;
   seedIndex?: number;
   fruitIndex?: number;
+  petId?: string;
+  petIndex?: number;
 } {
   if (actionType === 'plant') {
     const plotId = Number(data & 0xFFFFn);
@@ -41,6 +44,13 @@ function unpackData(actionType: string, data: bigint): {
     return { count: Number(data) };
   } else if (actionType === 'gluck_draw' || actionType === 'draw') {
     return { count: Number(data) };
+  } else if (actionType === 'buyPet') {
+    // buyPet: petIndex (低16位) 映射到 petId
+    // petIndex: 0=chick, 1=rabbit, 2=dog, 3=fox, 4=panda
+    const petIndex = Number(data & 0xFFFFn);
+    const petIdMap = ['chick', 'rabbit', 'dog', 'fox', 'panda'];
+    const petId = petIdMap[petIndex] || 'chick';
+    return { petId, petIndex };
   } else {
     return { plotId: Number(data) };
   }
@@ -305,6 +315,48 @@ export async function handleProtectAction(
   plot.protectedUntil = timestamp + PROTECT_DURATION;
 
   console.log(`[handleProtectAction] Plot ${plotId} protected until ${plot.protectedUntil}`);
+}
+
+/**
+ * 处理 buyPet 事件
+ */
+export async function handleBuyPetAction(
+  user: IUser,
+  petId: string,
+  timestamp: number
+): Promise<void> {
+  console.log(`[handleBuyPetAction] User ${user.wallet_address} buying pet ${petId}`);
+
+  const { PETS } = await import('@/constants');
+  
+  // 1. 验证宠物配置
+  const petConfig = PETS[petId];
+  if (!petConfig) {
+    throw new Error(`Invalid pet: ${petId}`);
+  }
+
+  // 2. 检查是否已拥有
+  if (user.pet_list.includes(petId)) {
+    throw new Error(`User already owns pet: ${petId}`);
+  }
+
+  // 3. 扣除金币
+  if (user.coins < petConfig.price) {
+    throw new Error(`Insufficient coins. Need ${petConfig.price}, have ${user.coins}`);
+  }
+  user.coins -= petConfig.price;
+
+  // 4. 添加宠物到列表
+  user.pet_list.push(petId);
+
+  // 5. 如果是第一只宠物，初始化离线收益时间
+  if (user.pet_list.length === 1) {
+    user.lastOfflineClaimAt = new Date();
+  }
+
+  console.log(
+    `[handleBuyPetAction] User ${user.wallet_address} bought pet ${petId} (${petConfig.name}) for ${petConfig.price} coins. Total pets: ${user.pet_list.length}`
+  );
 }
 
 /**
@@ -628,6 +680,11 @@ export async function onActionRecorded(
       break;
 
     case 'buyPet':
+      if (unpacked.petId) {
+        await handleBuyPetAction(user, unpacked.petId, timestamp);
+      }
+      break;
+
     case 'subscribeRobot':
     case 'exchange':
     case 'redeemReward':
@@ -651,6 +708,8 @@ export async function onActionRecorded(
         phrase_letters: user.phrase_letters,
         plots_list: user.plots_list,
         last_checkin_date: user.last_checkin_date,
+        pet_list: user.pet_list,
+        lastOfflineClaimAt: user.lastOfflineClaimAt,
       }
     }
   );

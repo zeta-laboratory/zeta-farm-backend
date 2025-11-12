@@ -394,6 +394,53 @@ export function validateGenericAction(
 }
 
 /**
+ * 验证购买宠物操作
+ */
+export function validateBuyPetAction(
+  user: IUser,
+  data: any
+): ActionValidationResult {
+  const { petId } = data;
+
+  // 1. 验证 petId
+  if (!petId || typeof petId !== 'string') {
+    return { valid: false, error: 'petId 是必填项' };
+  }
+
+  // 2. 验证宠物配置
+  const { PETS } = require('@/constants');
+  const petConfig = PETS[petId];
+  if (!petConfig) {
+    return { valid: false, error: `未找到宠物配置: ${petId}` };
+  }
+
+  // 3. 检查是否已拥有
+  if (user.pet_list.includes(petId)) {
+    return { valid: false, error: `已经拥有 ${petConfig.name}` };
+  }
+
+  // 4. 验证金币是否足够
+  if (user.coins < petConfig.price) {
+    return { 
+      valid: false, 
+      error: `金币不足。需要 ${petConfig.price}，当前 ${user.coins}` 
+    };
+  }
+
+  // 5. 将 petId 映射为 petIndex (用于合约)
+  const petIdMap = ['chick', 'rabbit', 'dog', 'fox', 'panda'];
+  const petIndex = petIdMap.indexOf(petId);
+  if (petIndex === -1) {
+    return { valid: false, error: `无效的宠物ID: ${petId}` };
+  }
+
+  // 返回 petIndex 作为 actionData
+  const actionData = BigInt(petIndex);
+  return { valid: true, actionData };
+}
+
+
+/**
  * 根据 actionType 调用对应的验证函数
  */
 export function validateAction(
@@ -435,10 +482,13 @@ export function validateAction(
     case 'gluck_draw':
       return validateGluckDrawAction(user, data);
     
+    // 宠物操作
+    case 'buyPet':
+      return validateBuyPetAction(user, data);
+    
     // 其他操作（暂不需要严格验证）
     case 'pesticide':
     case 'protect':
-    case 'buyPet':
     case 'subscribeRobot':
     case 'exchange':
     case 'redeemReward':
