@@ -73,37 +73,19 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
     for (let i = 0; i < user.plots_list.length; i++) {
       const plot = user.plots_list[i];
 
-      // 只处理已解锁且有作物的地块
+      // 空地块或未解锁：只返回基本信息
       if (!plot.unlocked || !plot.seedId || !plot.plantedAt) {
         plotsWithStatus.push({
           plot_index: plot.plot_index,
           unlocked: plot.unlocked,
-          seedId: plot.seedId,
-          plantedAt: plot.plantedAt,
-          pausedDuration: plot.pausedDuration,
-          pausedAt: plot.pausedAt,
-          waterRequirements: plot.waterRequirements,
-          weedRequirements: plot.weedRequirements,
-          fertilized: plot.fertilized,
-          protectedUntil: plot.protectedUntil,
-          status: {
-            stage: 'empty',
-            needsWater: false,
-            hasWeeds: false,
-            hasPests: false,
-            effectiveElapsedTime: 0,
-            progress: 0,
-            isReady: false,
-          },
+          seedId: null,
+          plantedAt: null,
         });
         continue;
       }
 
-      // 计算地块状态
+      // 计算地块状态（会更新 plot 的所有缓存字段）
       const status = calculatePlotStatus(plot, now);
-
-      // 自动处理暂停/解封
-      autoHandlePlotPause(plot, status, now);
 
       // 添加状态信息到返回数据
       plotsWithStatus.push({
@@ -117,7 +99,16 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         weedRequirements: plot.weedRequirements,
         fertilized: plot.fertilized,
         protectedUntil: plot.protectedUntil,
-        status,
+        pests: plot.pests,
+        lastPestCheckAt: plot.lastPestCheckAt,
+        matureAt: plot.matureAt,
+        witheredAt: plot.witheredAt,
+        stage: plot.stage,
+        // 实时状态字段
+        needsWater: status.needsWater,
+        hasWeeds: status.hasWeeds,
+        progress: status.progress,
+        // isReady 已移除 - 前端可通过 stage === 'ripe' 判断
       });
     }
 

@@ -88,8 +88,13 @@ export async function handlePlantAction(
   plot.pausedAt = null;
   plot.fertilized = false;
   plot.protectedUntil = null;
+  plot.pests = false;
+  plot.lastPestCheckAt = timestamp;
+  plot.matureAt = null;
+  plot.witheredAt = null;
+  plot.stage = 'seed';
 
-  // 3. 生成浇水/除草需求
+  // 3. 生成浇水/除草需求（包含 doneAt 字段）
   const { waterReqs, weedReqs } = generatePlotRequirements(seedId, timestamp, plot.fertilized);
   plot.waterRequirements = waterReqs;
   plot.weedRequirements = weedReqs;
@@ -126,8 +131,8 @@ export async function handleHarvestAction(
     user.backpack[fruitId] = 0;
   }
   
-  // 随机数量: 1-3 个果实
-  const fruitCount = Math.floor(Math.random() * 3) + 1;
+  // 每次收获 1 个果实
+  const fruitCount = 1;
   user.backpack[fruitId] += fruitCount;
 
   // 3. 随机掉落字母 (10% 概率)
@@ -147,7 +152,7 @@ export async function handleHarvestAction(
     console.log(`[handleHarvestAction] User leveled up to ${newLevel}!`);
   }
 
-  // 5. 清空地块
+  // 5. 清空地块（重置所有字段）
   plot.seedId = null;
   plot.plantedAt = null;
   plot.pausedDuration = 0;
@@ -156,6 +161,11 @@ export async function handleHarvestAction(
   plot.weedRequirements = [];
   plot.fertilized = false;
   plot.protectedUntil = null;
+  plot.pests = false;
+  plot.lastPestCheckAt = null;
+  plot.matureAt = null;
+  plot.witheredAt = null;
+  plot.stage = 'empty';
 
   console.log(`[handleHarvestAction] Gained ${seed.exp} exp, ${fruitCount}x ${fruitId}`);
 }
@@ -179,7 +189,8 @@ export async function handleWaterAction(
   const pendingWater = plot.waterRequirements.find(req => !req.done);
   if (pendingWater) {
     pendingWater.done = true;
-    console.log(`[handleWaterAction] Water requirement completed at time ${pendingWater.time}`);
+    pendingWater.doneAt = timestamp; // 记录完成时间
+    console.log(`[handleWaterAction] Water requirement completed at time ${pendingWater.time}, doneAt ${timestamp}`);
   } else {
     console.warn(`[handleWaterAction] No pending water requirements for plot ${plotId}`);
   }
@@ -204,7 +215,8 @@ export async function handleWeedAction(
   const pendingWeed = plot.weedRequirements.find(req => !req.done);
   if (pendingWeed) {
     pendingWeed.done = true;
-    console.log(`[handleWeedAction] Weed requirement completed at time ${pendingWeed.time}`);
+    pendingWeed.doneAt = timestamp; // 记录完成时间
+    console.log(`[handleWeedAction] Weed requirement completed at time ${pendingWeed.time}, doneAt ${timestamp}`);
   } else {
     console.warn(`[handleWeedAction] No pending weed requirements for plot ${plotId}`);
   }
@@ -249,6 +261,50 @@ export async function handleFertilizeAction(
 }
 
 /**
+ * 处理 pesticide 事件（杀虫剂）
+ */
+export async function handlePesticideAction(
+  user: IUser,
+  plotId: number,
+  timestamp: number
+): Promise<void> {
+  console.log(`[handlePesticideAction] User ${user.wallet_address} applying pesticide to plot ${plotId}`);
+
+  const plot = user.plots_list[plotId];
+  if (!plot || !plot.seedId) {
+    throw new Error(`Plot ${plotId} has no crop to apply pesticide`);
+  }
+
+  // 清除当前虫害
+  plot.pests = false;
+  plot.lastPestCheckAt = timestamp;
+
+  console.log(`[handlePesticideAction] Plot ${plotId} pests removed`);
+}
+
+/**
+ * 处理 protect 事件（保护期）
+ */
+export async function handleProtectAction(
+  user: IUser,
+  plotId: number,
+  timestamp: number
+): Promise<void> {
+  console.log(`[handleProtectAction] User ${user.wallet_address} protecting plot ${plotId}`);
+
+  const plot = user.plots_list[plotId];
+  if (!plot || !plot.seedId) {
+    throw new Error(`Plot ${plotId} has no crop to protect`);
+  }
+
+  // 设置24小时保护期（仅记录时间戳，不影响虫害逻辑）
+  const PROTECT_DURATION = 24 * 60 * 60; // 24小时
+  plot.protectedUntil = timestamp + PROTECT_DURATION;
+
+  console.log(`[handleProtectAction] Plot ${plotId} protected until ${plot.protectedUntil}`);
+}
+
+/**
  * 处理 shovel 事件
  */
 export async function handleShovelAction(
@@ -263,7 +319,7 @@ export async function handleShovelAction(
     throw new Error(`Plot ${plotId} not found`);
   }
 
-  // 清空地块（铲除作物）
+  // 清空地块（铲除作物，重置所有字段）
   plot.seedId = null;
   plot.plantedAt = null;
   plot.pausedDuration = 0;
@@ -272,6 +328,11 @@ export async function handleShovelAction(
   plot.weedRequirements = [];
   plot.fertilized = false;
   plot.protectedUntil = null;
+  plot.pests = false;
+  plot.lastPestCheckAt = null;
+  plot.matureAt = null;
+  plot.witheredAt = null;
+  plot.stage = 'empty';
 
   console.log(`[handleShovelAction] Plot ${plotId} cleared`);
 }
@@ -371,7 +432,7 @@ export async function handleSellFruitAction(
 ): Promise<void> {
   console.log(`[handleSellFruitAction] User ${user.wallet_address} selling ${count}x ${fruitId}`);
 
-  // 获取对应的种子价格（水果价格 = 种子价格 * 1.5）
+  // 获取对应的种子配置
   const seedIndex = fruitId.split('_')[1];
   const seedId = `seed_${seedIndex}`;
   const seed = SEEDS[seedId];
@@ -380,7 +441,8 @@ export async function handleSellFruitAction(
     throw new Error(`Invalid fruit: ${fruitId}`);
   }
 
-  const fruitPrice = Math.floor(seed.price * 1.5);
+  // 果实售价直接使用 seed.price（表格中的"售价"列）
+  const fruitPrice = seed.price;
   const totalEarnings = fruitPrice * count;
 
   // 1. 扣除水果
@@ -549,9 +611,19 @@ export async function onActionRecorded(
       }
       break;
 
-    // 其他操作（暂时忽略）
+    // 其他操作
     case 'pesticide':
+      if (unpacked.plotId !== undefined) {
+        await handlePesticideAction(user, unpacked.plotId, timestamp);
+      }
+      break;
+
     case 'protect':
+      if (unpacked.plotId !== undefined) {
+        await handleProtectAction(user, unpacked.plotId, timestamp);
+      }
+      break;
+
     case 'buyPet':
     case 'subscribeRobot':
     case 'exchange':

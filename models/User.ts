@@ -1,18 +1,36 @@
 import { ObjectId, Collection } from 'mongodb';
 import connectDB from '@/lib/mongodb';
 
+// 地块需求接口
+export interface IPlotRequirement {
+  time: number;              // 相对生长时间点（秒）
+  done: boolean;
+  doneAt: number | null;     // 实际完成时间戳（UTC秒）
+}
+
 // 地块对象的接口
 export interface IPlot {
   plot_index: number;
   unlocked: boolean;
   seedId: string | null;
-  plantedAt: number | null;
-  pausedDuration: number;
-  pausedAt: number | null;
-  waterRequirements: Array<{ time: number; done: boolean }>;
-  weedRequirements: Array<{ time: number; done: boolean }>;
+  plantedAt: number | null;           // UTC 秒时间戳
   fertilized: boolean;
-  protectedUntil: number | null;
+  pausedDuration: number;             // 累计暂停秒数
+  pausedAt: number | null;            // 当前暂停开始时间（UTC秒）
+  protectedUntil: number | null;      // 杀虫剂保护期限（UTC秒）
+  
+  // 需求数组（使用新接口）
+  waterRequirements: IPlotRequirement[];
+  weedRequirements: IPlotRequirement[];
+  
+  // 虫害状态（后端管理）
+  pests: boolean;                     // 当前是否有虫害
+  lastPestCheckAt: number | null;     // 上次虫害判定时间（UTC秒）
+  
+  // 计算缓存字段（用于前端展示）
+  matureAt: number | null;            // 计算出的成熟时间（UTC秒）
+  witheredAt: number | null;          // 枯萎时间（UTC秒）
+  stage: string | null;               // 当前阶段：'seed'|'sprout'|'growing'|'ripe'|'wither'|'paused'|'empty'
 }
 
 // 用户文档接口
@@ -48,6 +66,11 @@ function initializePlots(): IPlot[] {
     weedRequirements: [],
     fertilized: false,
     protectedUntil: null,
+    pests: false,
+    lastPestCheckAt: null,
+    matureAt: null,
+    witheredAt: null,
+    stage: 'empty',
   }));
 }
 
