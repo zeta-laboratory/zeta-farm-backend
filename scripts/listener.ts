@@ -14,7 +14,7 @@ import { resolve } from 'path';
 
 // Load environment variables as early as possible using require() so
 // dotenv runs before any other module that reads process.env.
-require('dotenv').config({ path: resolve(__dirname, '.env') });
+require('dotenv').config({ path: resolve(__dirname, '../.env') });
 
 // Require modules after dotenv to avoid import-time env reads.
 const connectDB = require('../lib/mongodb').default;
