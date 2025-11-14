@@ -39,6 +39,7 @@ export interface IUser {
   wallet_address: string;
   zeta: string;
   tickets: number;
+  processedExchangeNonces?: number[];
   coins: number;
   exp: number;
   level: number;
@@ -107,6 +108,7 @@ class UserModel {
     const newUser: Omit<IUser, '_id'> = {
       wallet_address: wallet_address.toLowerCase(),
       zeta: '0.00',
+      processedExchangeNonces: [],
       tickets: 0,
       coins: 1000,
       exp: 0,

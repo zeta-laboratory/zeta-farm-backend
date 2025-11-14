@@ -101,6 +101,57 @@ export async function generateActionSignature(
 }
 
 /**
+ * 生成 EXCHANGE 类型的 EIP-712 签名（用于合约 exchangeCoinsForZeta）
+ * @param userAddress - 用户地址
+ * @param amountWei - 要发送的原生币数量（wei）
+ * @param nonce - 用户 nonce
+ */
+export async function generateExchangeSignature(
+  userAddress: `0x${string}`,
+  amountWei: bigint,
+  nonce: bigint
+): Promise<`0x${string}`> {
+  try {
+    const walletClient = getWalletClient();
+
+    const signature = await walletClient.signTypedData({
+      domain: EIP712_DOMAIN,
+      types: EIP712_TYPES,
+      primaryType: 'Exchange',
+      message: {
+        user: userAddress,
+        amount: amountWei,
+        nonce,
+      },
+    });
+
+    return signature;
+  } catch (error) {
+    console.error('[generateExchangeSignature] Error:', error);
+    throw new Error('Failed to generate exchange signature');
+  }
+}
+
+/**
+ * 获取合约 prizePoolBalance
+ */
+export async function getPrizePoolBalance(): Promise<bigint> {
+  try {
+    const res = await publicClient.readContract({
+      address: FARM_TREASURY_ADDRESS,
+      abi: FARM_TREASURY_ABI,
+      functionName: 'prizePoolBalance',
+      args: [],
+    });
+
+    return res as bigint;
+  } catch (error) {
+    console.error('[getPrizePoolBalance] Error:', error);
+    throw new Error('Failed to read prize pool balance');
+  }
+}
+
+/**
  * 验证合约地址是否已配置
  */
 export function validateContractConfig(): void {

@@ -20,12 +20,30 @@ export const FARM_TREASURY_ABI = [
     outputs: [{ name: '', type: 'uint256' }],
   },
   {
+    name: 'prizePoolBalance',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
     name: 'recordActionWithSignature',
     type: 'function',
     stateMutability: 'payable',
     inputs: [
       { name: 'actionType', type: 'string' },
       { name: 'data', type: 'uint256' },
+      { name: 'nonce', type: 'uint256' },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'exchangeCoinsForZeta',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'amount', type: 'uint256' },
       { name: 'nonce', type: 'uint256' },
       { name: 'signature', type: 'bytes' },
     ],
@@ -39,6 +57,15 @@ export const FARM_TREASURY_ABI = [
       { name: 'actionType', type: 'string', indexed: false },
       { name: 'data', type: 'uint256', indexed: false },
       { name: 'timestamp', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    name: 'ExchangePerformed',
+    type: 'event',
+    inputs: [
+      { name: 'user', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'nonce', type: 'uint256', indexed: false },
     ],
   },
 ] as const;
@@ -61,6 +88,11 @@ export const EIP712_TYPES = {
     { name: 'user', type: 'address' },
     { name: 'actionType', type: 'string' },
     { name: 'data', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+  ],
+  Exchange: [
+    { name: 'user', type: 'address' },
+    { name: 'amount', type: 'uint256' },
     { name: 'nonce', type: 'uint256' },
   ],
 } as const;

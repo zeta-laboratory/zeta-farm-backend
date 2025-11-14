@@ -439,6 +439,44 @@ export function validateBuyPetAction(
   return { valid: true, actionData };
 }
 
+/**
+ * 验证兑换（银行）操作
+ * data: { amount: number, targetCurrency: 'zeta' | 'tickets' }
+ */
+export function validateExchangeAction(
+  user: IUser,
+  data: { amount: number; targetCurrency: string }
+): ActionValidationResult {
+  const { amount, targetCurrency } = data;
+
+  if (!amount || amount <= 0) {
+    return { valid: false, error: '兑换金额必须大于 0' };
+  }
+
+  // 支持两种兑换目标：zeta 或 tickets
+  const target = targetCurrency === 'tickets' ? 'tickets' : 'zeta';
+
+  // 每种兑换的最小单位与费率（保持与前端一致）
+  const ZETA_EXCHANGE_RATE = 10; // 10 coins -> 1 ZETA
+  const TICKET_EXCHANGE_RATE = 70; // 70 coins -> 1 ticket
+
+  const minAmount = target === 'zeta' ? ZETA_EXCHANGE_RATE : TICKET_EXCHANGE_RATE;
+
+  if (amount < minAmount) {
+    return { valid: false, error: `兑换金额至少为 ${minAmount} 金币` };
+  }
+
+  if (user.coins < amount) {
+    return { valid: false, error: `金币不足，需要 ${amount} 金币，当前 ${user.coins} 金币` };
+  }
+
+  // 打包数据：amount (高位) + targetFlag (低16位: 0=zeta,1=tickets)
+  const targetFlag = target === 'tickets' ? 1 : 0;
+  const actionData = (BigInt(amount) << 16n) | BigInt(targetFlag);
+
+  return { valid: true, actionData };
+}
+
 
 /**
  * 根据 actionType 调用对应的验证函数
@@ -490,9 +528,12 @@ export function validateAction(
     case 'pesticide':
     case 'protect':
     case 'subscribeRobot':
-    case 'exchange':
     case 'redeemReward':
       return validateGenericAction(user, data);
+
+    // 银行兑换（金币 -> ZETA 或 奖券）
+    case 'exchange':
+      return validateExchangeAction(user, data);
     
     default:
       return { valid: false, error: `未知的操作类型: ${actionType}` };

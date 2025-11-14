@@ -24,6 +24,8 @@ function unpackData(actionType: string, data: bigint): {
   fruitIndex?: number;
   petId?: string;
   petIndex?: number;
+  exchangeAmount?: number;
+  exchangeTarget?: 'zeta' | 'tickets';
 } {
   if (actionType === 'plant') {
     const plotId = Number(data & 0xFFFFn);
@@ -51,6 +53,12 @@ function unpackData(actionType: string, data: bigint): {
     const petIdMap = ['chick', 'rabbit', 'dog', 'fox', 'panda'];
     const petId = petIdMap[petIndex] || 'chick';
     return { petId, petIndex };
+  } else if (actionType === 'exchange') {
+    // 打包格式：amount (高位) + targetFlag (低16位: 0=zeta,1=tickets)
+    const targetFlag = Number(data & 0xFFFFn);
+    const amount = Number(data >> 16n);
+    const target = targetFlag === 1 ? 'tickets' : 'zeta';
+    return { exchangeAmount: amount, exchangeTarget: target };
   } else {
     return { plotId: Number(data) };
   }
@@ -685,8 +693,41 @@ export async function onActionRecorded(
       }
       break;
 
-    case 'subscribeRobot':
     case 'exchange':
+      // 兑换逻辑：金币 -> ZETA 或 奖券
+      if (unpacked.exchangeAmount !== undefined && unpacked.exchangeTarget) {
+        const amount = unpacked.exchangeAmount;
+        const target = unpacked.exchangeTarget; // 'zeta' | 'tickets'
+
+        // 防御性检查
+        if (user.coins < amount) {
+          console.warn(`[handleExchangeAction] User ${user.wallet_address} has insufficient coins for exchange: need ${amount}, have ${user.coins}`);
+          break;
+        }
+
+        // 扣除金币
+        user.coins -= amount;
+
+        // 兑换到 ZETA
+        if (target === 'zeta') {
+          const ZETA_EXCHANGE_RATE = 10; // 与前端保持一致
+          const zetaAmount = Math.floor(amount / ZETA_EXCHANGE_RATE);
+          const current = parseFloat(user.zeta || '0') || 0;
+          user.zeta = (current + zetaAmount).toFixed(2);
+          console.log(`[handleExchangeAction] User ${user.wallet_address} exchanged ${amount} coins -> ${zetaAmount} ZETA (new zeta: ${user.zeta})`);
+        } else {
+          // 兑换到奖券
+          const TICKET_EXCHANGE_RATE = 70;
+          const tickets = Math.floor(amount / TICKET_EXCHANGE_RATE);
+          user.tickets += tickets;
+          console.log(`[handleExchangeAction] User ${user.wallet_address} exchanged ${amount} coins -> ${tickets} tickets (new tickets: ${user.tickets})`);
+        }
+      } else {
+        console.warn(`[handleExchangeAction] Invalid exchange unpacked data:`, unpacked);
+      }
+      break;
+
+    case 'subscribeRobot':
     case 'redeemReward':
       console.log(`[onActionRecorded] Action ${actionType} not yet implemented`);
       break;
@@ -700,10 +741,11 @@ export async function onActionRecorded(
     { wallet_address: user.wallet_address },
     {
       $set: {
-        coins: user.coins,
+          coins: user.coins,
         exp: user.exp,
         level: user.level,
         tickets: user.tickets,
+          zeta: user.zeta,
         backpack: user.backpack,
         phrase_letters: user.phrase_letters,
         plots_list: user.plots_list,
@@ -714,4 +756,69 @@ export async function onActionRecorded(
     }
   );
   console.log(`[onActionRecorded] User ${user.wallet_address} data saved successfully`);
+}
+
+/**
+ * 处理合约 ExchangePerformed 事件（合约已经把 ZETA 转账给用户）
+ * @param userAddress - 钱包地址
+ * @param amountWei - 转账金额（wei）
+ * @param nonce - 合约 nonce
+ * @param txHash - 交易哈希
+ */
+export async function onExchangePerformed(
+  userAddress: string,
+  amountWei: bigint,
+  nonce: number,
+  txHash?: string
+): Promise<void> {
+  const addr = userAddress.toLowerCase();
+  const user = await User.findOneOrCreate(addr) as IUser;
+
+  // 幂等性检查
+  if (!user.processedExchangeNonces) user.processedExchangeNonces = [];
+  if (user.processedExchangeNonces.includes(nonce)) {
+    console.log(`[onExchangePerformed] Already processed exchange nonce ${nonce} for ${addr}, skipping`);
+    return;
+  }
+
+  // 计算 ZETA 数量（整数部分和小数）
+  const ZETA_BASE = 10n ** 18n;
+  const zetaInt = Number(amountWei / ZETA_BASE);
+  const zetaFraction = Number(amountWei % ZETA_BASE) / Number(ZETA_BASE);
+  const zetaAmount = zetaInt + zetaFraction; // 可能包含小数
+
+  // coins 支出 = zetaInt * RATE（使用整数兑换率）
+  const ZETA_EXCHANGE_RATE = 10; // 10 coins -> 1 ZETA
+  const coinsSpent = zetaInt * ZETA_EXCHANGE_RATE;
+
+  // 扣除金币（保护性，避免负值）
+  if (user.coins < coinsSpent) {
+    console.warn(`[onExchangePerformed] User ${addr} has insufficient coins to deduct ${coinsSpent}. Current: ${user.coins}`);
+    // 仍然继续，扣到 0
+    user.coins = Math.max(0, user.coins - coinsSpent);
+  } else {
+    user.coins -= coinsSpent;
+  }
+
+  // 更新 zeta 字段（字符串，保留两位小数）
+  const currentZeta = parseFloat(user.zeta || '0') || 0;
+  const newZeta = (currentZeta + zetaAmount);
+  user.zeta = newZeta.toFixed(2);
+
+  // 标记为已处理
+  user.processedExchangeNonces.push(nonce);
+
+  // 保存用户数据
+  await User.updateOne(
+    { wallet_address: addr },
+    {
+      $set: {
+        coins: user.coins,
+        zeta: user.zeta,
+        processedExchangeNonces: user.processedExchangeNonces,
+      }
+    }
+  );
+
+  console.log(`[onExchangePerformed] Processed exchange for ${addr}: ${zetaAmount} ZETA, spent ${coinsSpent} coins, tx=${txHash}`);
 }

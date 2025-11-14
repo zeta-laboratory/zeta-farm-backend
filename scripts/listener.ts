@@ -71,6 +71,39 @@ async function startListener() {
     },
   });
 
+  // 3b. 监听 ExchangePerformed 事件（合约直接向用户支付 ZETA）
+  const unwatchExchange = publicClient.watchContractEvent({
+    address: FARM_TREASURY_ADDRESS,
+    abi: FARM_TREASURY_ABI,
+    eventName: 'ExchangePerformed',
+    onLogs: async (logs: any[]) => {
+      for (const log of logs) {
+        try {
+          const { args, transactionHash } = log;
+          if (!args) continue;
+
+          const { user, amount, nonce } = args;
+          console.log('========================================');
+          console.log('📥 ExchangePerformed Event');
+          console.log(`TX: ${transactionHash}`);
+          console.log(`User: ${user}`);
+          console.log(`Amount (wei): ${amount.toString()}`);
+          console.log(`Nonce: ${nonce.toString()}`);
+          console.log('========================================\n');
+
+          // 延迟加载处理函数，避免循环依赖
+          const { onExchangePerformed } = require('../utils/eventHandlers');
+          await onExchangePerformed(user as string, amount as bigint, Number(nonce), transactionHash as string);
+        } catch (error) {
+          console.error('❌ Error processing ExchangePerformed event:', error);
+        }
+      }
+    },
+    onError: (error: Error) => {
+      console.error('❌ Exchange event listener error:', error);
+    },
+  });
+
   // 4. 处理优雅关闭
   process.on('SIGINT', () => {
     console.log('\n\n⚠️  Received SIGINT, shutting down...');
