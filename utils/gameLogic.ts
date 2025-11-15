@@ -203,11 +203,13 @@ export function calculatePlotStatus(
   const effectiveElapsedTime = now - plot.plantedAt - pausedDuration;
 
   // 3. 检查是否需要浇水/除草
-  const needsWater = plot.waterRequirements.some(
-    req => effectiveElapsedTime >= req.time && !req.done
+  // 为了与前端展示逻辑一致：当地块处于暂停（plot.pausedAt 非 null）或
+  // 实际经过时间达到需求点时，视为该需求已触发且未完成。
+  const needsWater = (plot.waterRequirements || []).some(
+    req => !req.done && (plot.pausedAt !== null || effectiveElapsedTime >= req.time)
   );
-  const hasWeeds = plot.weedRequirements.some(
-    req => effectiveElapsedTime >= req.time && !req.done
+  const hasWeeds = (plot.weedRequirements || []).some(
+    req => !req.done && (plot.pausedAt !== null || effectiveElapsedTime >= req.time)
   );
 
   // 4. 计算生长阶段时间（考虑肥料效果）
