@@ -557,19 +557,44 @@ export async function handleCheckinAction(
   timestamp: number
 ): Promise<void> {
   console.log(`[handleCheckinAction] User ${user.wallet_address} checking in`);
+  // 签到奖励：按概率发放金币，同时奖励 1 张奖券
+  // 奖励分布（金币，概率）：
+  // 0.1 -> 35%
+  // 0.5 -> 25%
+  // 1   -> 20%
+  // 2   -> 15%
+  // 5   -> 5%
+  const checkinRewards: Array<{ amount: number; prob: number }> = [
+    { amount: 0.1, prob: 0.35 },
+    { amount: 0.5, prob: 0.25 },
+    { amount: 1.0, prob: 0.20 },
+    { amount: 2.0, prob: 0.15 },
+    { amount: 5.0, prob: 0.05 },
+  ];
 
-  // 签到奖励：金币和奖券
-  const CHECKIN_COINS = 50;
-  const CHECKIN_TICKETS = 1;
+  // 累积概率采样
+  const r = Math.random();
+  let acc = 0;
+  let selected = checkinRewards[0].amount;
+  for (const item of checkinRewards) {
+    acc += item.prob;
+    if (r <= acc) {
+      selected = item.amount;
+      break;
+    }
+  }
 
-  user.coins += CHECKIN_COINS;
-  user.tickets += CHECKIN_TICKETS;
+  // 增加金币和奖券（奖券固定 1）
+  user.coins += selected;
+  user.tickets += 1;
+
+  console.log(`[handleCheckinAction] User ${user.wallet_address} received ${selected} coins and 1 ticket for checkin`);
 
   // 更新签到日期
   const today = new Date(timestamp * 1000).toISOString().split('T')[0];
   user.last_checkin_date = today;
 
-  console.log(`[handleCheckinAction] Gained ${CHECKIN_COINS} coins and ${CHECKIN_TICKETS} ticket`);
+  console.log(`[handleCheckinAction] Checkin processed for ${user.wallet_address}: coins +${selected}, tickets +1, date ${user.last_checkin_date}`);
 }
 
 /**
