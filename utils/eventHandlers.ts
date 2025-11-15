@@ -714,14 +714,14 @@ export async function onActionRecorded(
 
         // 兑换到 ZETA
         if (target === 'zeta') {
-          const ZETA_EXCHANGE_RATE = 10; // 与前端保持一致
+          const ZETA_EXCHANGE_RATE = 20; // 与前端保持一致
           const zetaAmount = Math.floor(amount / ZETA_EXCHANGE_RATE);
           const current = parseFloat(user.zeta || '0') || 0;
           user.zeta = (current + zetaAmount).toFixed(2);
           console.log(`[handleExchangeAction] User ${user.wallet_address} exchanged ${amount} coins -> ${zetaAmount} ZETA (new zeta: ${user.zeta})`);
         } else {
           // 兑换到奖券
-          const TICKET_EXCHANGE_RATE = 70;
+          const TICKET_EXCHANGE_RATE = 50;
           const tickets = Math.floor(amount / TICKET_EXCHANGE_RATE);
           user.tickets += tickets;
           console.log(`[handleExchangeAction] User ${user.wallet_address} exchanged ${amount} coins -> ${tickets} tickets (new tickets: ${user.tickets})`);
@@ -792,7 +792,7 @@ export async function onExchangePerformed(
   const zetaAmount = zetaInt + zetaFraction; // 可能包含小数
 
   // coins 支出 = zetaInt * RATE（使用整数兑换率）
-  const ZETA_EXCHANGE_RATE = 10; // 10 coins -> 1 ZETA
+  const ZETA_EXCHANGE_RATE = 20; // 20 coins -> 1 ZETA
   const coinsSpent = zetaInt * ZETA_EXCHANGE_RATE;
 
   // 扣除金币（保护性，避免负值）

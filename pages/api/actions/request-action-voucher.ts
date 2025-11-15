@@ -98,8 +98,8 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
 
       // 如果兑换目标是 zeta，则我们必须生成 EXCHANGE 类型的签名（合约会直接转 ZETA）
       if (targetFlag === 0) {
-        // coins -> zeta 的汇率（与前端保持一致）
-        const ZETA_EXCHANGE_RATE = 10; // 10 coins -> 1 ZETA
+  // coins -> zeta 的汇率（与前端保持一致）
+  const ZETA_EXCHANGE_RATE = 20; // 20 coins -> 1 ZETA
         const zetaAmount = Math.floor(coinsAmount / ZETA_EXCHANGE_RATE);
 
         if (zetaAmount <= 0) {

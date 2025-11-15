@@ -457,8 +457,8 @@ export function validateExchangeAction(
   const target = targetCurrency === 'tickets' ? 'tickets' : 'zeta';
 
   // 每种兑换的最小单位与费率（保持与前端一致）
-  const ZETA_EXCHANGE_RATE = 10; // 10 coins -> 1 ZETA
-  const TICKET_EXCHANGE_RATE = 70; // 70 coins -> 1 ticket
+  const ZETA_EXCHANGE_RATE = 20; // 20 coins -> 1 ZETA
+  const TICKET_EXCHANGE_RATE = 50; // 50 coins -> 1 ticket
 
   const minAmount = target === 'zeta' ? ZETA_EXCHANGE_RATE : TICKET_EXCHANGE_RATE;
 
