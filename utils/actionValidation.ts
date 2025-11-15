@@ -221,11 +221,11 @@ export function validatePesticideAction(
   const plot = user.plots_list[plotId];
 
   // 2. 验证地块是否有作物
-  if (!plot || !plot.seedId || !plot.plantedAt) {
+  if (!plot.seedId || !plot.plantedAt) {
     return { valid: false, error: '地块没有作物' };
   }
 
-  // 3. 计算地块状态以判断是否存在虫害
+  // 3. 计算地块状态并检查是否有虫害
   const now = Math.floor(Date.now() / 1000);
   const status = calculatePlotStatus(plot, now);
 

@@ -157,7 +157,7 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
       actionType,
       data: actionData.toString(),
       user: userAddress,
-      timestamp: Math.floor(Date.now() / 1000), // 使用当前时间作为 timestamp（Unix 秒）
+      timestamp: actionData.toString(), // 添加 timestamp 字段（与 data 相同）
     };
 
     console.log(
