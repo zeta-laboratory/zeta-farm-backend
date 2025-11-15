@@ -39,39 +39,59 @@ export interface PlotStatus {
  * @returns 累计暂停秒数
  */
 export function calculatePausedDuration(plot: IPlot, now: number): number {
-  let pausedDuration = 0;
-  let lastPauseStart: number | null = null;
-
-  // 组合所有需求点并按时间排序
-  const allReqs = [...plot.waterRequirements, ...plot.weedRequirements]
-    .sort((a, b) => a.time - b.time);
+  // Build pause intervals for all requirements, using absolute timestamps.
+  // For completed reqs we use [reqStart, doneAt].
+  // For uncompleted-but-triggered reqs we use [reqStart, now].
+  // Then merge overlapping intervals to avoid double-counting.
+  const intervals: Array<[number, number]> = [];
+  const allReqs = [...plot.waterRequirements, ...plot.weedRequirements];
 
   for (const req of allReqs) {
-    const reqTimeAbs = (plot.plantedAt || 0) + req.time;
+    const reqStart = (plot.plantedAt || 0) + req.time;
 
-    // 如果需求已完成（有 doneAt），计算这段暂停时间
-    if (req.doneAt) {
-      // 暂停开始时间 = 需求触发时间
-      const pauseStart = reqTimeAbs;
-      // 暂停结束时间 = 完成时间
-      pausedDuration += req.doneAt - pauseStart;
-    } 
-    // 如果需求未完成但时间已到，开始新的暂停
-    else if (!req.done && now >= reqTimeAbs) {
-      if (lastPauseStart === null) {
-        lastPauseStart = reqTimeAbs;
-      }
+    // If the requirement time hasn't been reached yet, it's not a pause.
+    if (now < reqStart) continue;
+
+    if (req.done && req.doneAt) {
+      // Only add if doneAt is after start (defensive)
+      if (req.doneAt > reqStart) intervals.push([reqStart, req.doneAt]);
+    } else {
+      // Uncompleted and triggered: open interval until now
+      intervals.push([reqStart, now]);
     }
   }
 
-  // 若仍在暂停中（有未完成的需求）
-  if (lastPauseStart !== null) {
-    pausedDuration += now - lastPauseStart;
-    plot.pausedAt = lastPauseStart;
-  } else {
+  if (intervals.length === 0) {
     plot.pausedAt = null;
+    plot.pausedDuration = 0;
+    return 0;
   }
 
+  // Sort intervals by start
+  intervals.sort((a, b) => a[0] - b[0]);
+
+  // Merge overlapping intervals
+  const merged: Array<[number, number]> = [];
+  let [curStart, curEnd] = intervals[0];
+  for (let i = 1; i < intervals.length; i++) {
+    const [s, e] = intervals[i];
+    if (s <= curEnd) {
+      // overlap — extend end
+      curEnd = Math.max(curEnd, e);
+    } else {
+      merged.push([curStart, curEnd]);
+      curStart = s;
+      curEnd = e;
+    }
+  }
+  merged.push([curStart, curEnd]);
+
+  // Sum merged interval lengths
+  let pausedDuration = merged.reduce((sum, [s, e]) => sum + (e - s), 0);
+
+  // If there's an ongoing interval that ends at 'now', set pausedAt to its start
+  const ongoing = merged.find(([s, e]) => e === now);
+  plot.pausedAt = ongoing ? ongoing[0] : null;
   plot.pausedDuration = pausedDuration;
   return pausedDuration;
 }
