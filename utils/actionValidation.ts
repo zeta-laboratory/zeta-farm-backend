@@ -205,6 +205,39 @@ export function validateFertilizeAction(
 }
 
 /**
+ * 验证除虫操作
+ */
+export function validatePesticideAction(
+  user: IUser,
+  data: { plotId: number }
+): ActionValidationResult {
+  const { plotId } = data;
+
+  // 1. 验证地块索引
+  if (plotId < 0 || plotId >= user.plots_list.length) {
+    return { valid: false, error: '无效的地块索引' };
+  }
+
+  const plot = user.plots_list[plotId];
+
+  // 2. 验证地块是否有作物
+  if (!plot || !plot.seedId || !plot.plantedAt) {
+    return { valid: false, error: '地块没有作物' };
+  }
+
+  // 3. 计算地块状态以判断是否存在虫害
+  const now = Math.floor(Date.now() / 1000);
+  const status = calculatePlotStatus(plot, now);
+
+  if (!status.hasPests) {
+    return { valid: false, error: '地块没有虫害' };
+  }
+
+  const actionData = BigInt(plotId);
+  return { valid: true, actionData };
+}
+
+/**
  * 验证铲除操作（清空地块）
  */
 export function validateShovelAction(
@@ -526,6 +559,7 @@ export function validateAction(
     
     // 其他操作（暂不需要严格验证）
     case 'pesticide':
+      return validatePesticideAction(user, data);
     case 'protect':
     case 'subscribeRobot':
     case 'redeemReward':
