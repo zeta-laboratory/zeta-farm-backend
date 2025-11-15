@@ -98,7 +98,6 @@ async function handler(req: AuthenticatedRequest, res: NextApiResponse) {
         waterRequirements: plot.waterRequirements,
         weedRequirements: plot.weedRequirements,
         fertilized: plot.fertilized,
-        protectedUntil: plot.protectedUntil,
         pests: plot.pests,
         lastPestCheckAt: plot.lastPestCheckAt,
         matureAt: plot.matureAt,

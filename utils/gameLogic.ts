@@ -110,6 +110,12 @@ export function calculatePests(plot: IPlot, now: number, stage: PlotStage): void
     return;
   }
 
+  // 如果该作物在本次种植周期内已经出现过虫害，则不再重新生成（一次性事件）
+  if (plot.pestsOccurred) {
+    plot.lastPestCheckAt = now;
+    return;
+  }
+
   // 如果已经有虫害，不再重复触发
   if (plot.pests) {
     plot.lastPestCheckAt = now;
@@ -130,6 +136,10 @@ export function calculatePests(plot: IPlot, now: number, stage: PlotStage): void
   }
 
   plot.pests = hasPest;
+  if (hasPest) {
+    // 标记该作物在本次种植周期内已发生虫害（除虫后不再复发）
+    plot.pestsOccurred = true;
+  }
   plot.lastPestCheckAt = now;
 
   if (hasPest) {

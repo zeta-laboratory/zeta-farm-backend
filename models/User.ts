@@ -17,7 +17,7 @@ export interface IPlot {
   fertilized: boolean;
   pausedDuration: number;             // 累计暂停秒数
   pausedAt: number | null;            // 当前暂停开始时间（UTC秒）
-  protectedUntil: number | null;      // 杀虫剂保护期限（UTC秒）
+  // protectedUntil: number | null;      // 杀虫剂保护期限（UTC秒） -- protection removed
   
   // 需求数组（使用新接口）
   waterRequirements: IPlotRequirement[];
@@ -25,6 +25,7 @@ export interface IPlot {
   
   // 虫害状态（后端管理）
   pests: boolean;                     // 当前是否有虫害
+  pestsOccurred?: boolean;            // 本次种植周期内是否曾出现过虫害（出现一次后不再重新生成）
   lastPestCheckAt: number | null;     // 上次虫害判定时间（UTC秒）
   
   // 计算缓存字段（用于前端展示）
@@ -66,8 +67,9 @@ function initializePlots(): IPlot[] {
     waterRequirements: [],
     weedRequirements: [],
     fertilized: false,
-    protectedUntil: null,
-    pests: false,
+      // protectedUntil removed
+      pests: false,
+      pestsOccurred: false,
     lastPestCheckAt: null,
     matureAt: null,
     witheredAt: null,

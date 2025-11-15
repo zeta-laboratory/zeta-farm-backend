@@ -106,8 +106,8 @@ export async function handlePlantAction(
   plot.pausedDuration = 0;
   plot.pausedAt = null;
   plot.fertilized = false;
-  plot.protectedUntil = null;
   plot.pests = false;
+  plot.pestsOccurred = false;
   plot.lastPestCheckAt = timestamp;
   plot.matureAt = null;
   plot.witheredAt = null;
@@ -134,6 +134,12 @@ export async function handleHarvestAction(
   const plot = user.plots_list[plotId];
   if (!plot || !plot.seedId) {
     throw new Error(`Plot ${plotId} has no crop to harvest`);
+  }
+
+  // If there are pests on the plot, harvesting is blocked until pests are removed.
+  if (plot.pests) {
+    console.warn(`[handleHarvestAction] Plot ${plotId} has pests; harvest blocked`);
+    throw new Error('Cannot harvest while pests are present');
   }
 
   const seed = SEEDS[plot.seedId];
@@ -181,8 +187,8 @@ export async function handleHarvestAction(
   plot.waterRequirements = [];
   plot.weedRequirements = [];
   plot.fertilized = false;
-  plot.protectedUntil = null;
   plot.pests = false;
+  plot.pestsOccurred = false;
   plot.lastPestCheckAt = null;
   plot.matureAt = null;
   plot.witheredAt = null;
@@ -297,7 +303,14 @@ export async function handlePesticideAction(
   }
 
   // 清除当前虫害
+  // 如果当前有虫害，则记录该作物在本次种植周期内已经发生过虫害，
+  // 并清除 visible pests。这样即使我们清除了 pests 字段，也能
+  // 防止 calculatePests 在同一 planting 周期内再次生成虫害。
+  const hadPests = !!plot.pests;
   plot.pests = false;
+  if (hadPests) {
+    plot.pestsOccurred = true;
+  }
   plot.lastPestCheckAt = timestamp;
 
   console.log(`[handlePesticideAction] Plot ${plotId} pests removed`);
@@ -311,18 +324,9 @@ export async function handleProtectAction(
   plotId: number,
   timestamp: number
 ): Promise<void> {
-  console.log(`[handleProtectAction] User ${user.wallet_address} protecting plot ${plotId}`);
-
-  const plot = user.plots_list[plotId];
-  if (!plot || !plot.seedId) {
-    throw new Error(`Plot ${plotId} has no crop to protect`);
-  }
-
-  // 设置24小时保护期（仅记录时间戳，不影响虫害逻辑）
-  const PROTECT_DURATION = 24 * 60 * 60; // 24小时
-  plot.protectedUntil = timestamp + PROTECT_DURATION;
-
-  console.log(`[handleProtectAction] Plot ${plotId} protected until ${plot.protectedUntil}`);
+  // Protect action removed from the game - keep handler for safety but reject
+  console.log(`[handleProtectAction] Protect action invoked but protection mechanic has been removed`);
+  throw new Error('Protect action is no longer supported');
 }
 
 /**
@@ -390,8 +394,8 @@ export async function handleShovelAction(
   plot.waterRequirements = [];
   plot.weedRequirements = [];
   plot.fertilized = false;
-  plot.protectedUntil = null;
   plot.pests = false;
+  plot.pestsOccurred = false;
   plot.lastPestCheckAt = null;
   plot.matureAt = null;
   plot.witheredAt = null;
